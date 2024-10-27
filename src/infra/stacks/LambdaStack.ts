@@ -1,22 +1,38 @@
-import { Stack, StackProps } from 'aws-cdk-lib'
-import { LambdaIntegration } from 'aws-cdk-lib/aws-apigateway';
-import { Code, Function as Lambda, Runtime } from 'aws-cdk-lib/aws-lambda';
-import { Construct } from 'constructs';
-import { join } from 'path';
+import { Stack, StackProps } from "aws-cdk-lib";
+import { LambdaIntegration } from "aws-cdk-lib/aws-apigateway";
+import { ITable } from "aws-cdk-lib/aws-dynamodb";
+import { Effect, PolicyStatement } from "aws-cdk-lib/aws-iam";
+import { Code, Runtime } from "aws-cdk-lib/aws-lambda";
+import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
+import { Construct } from "constructs";
+import { join } from "path";
 
+interface LambdaStackProps extends StackProps {
+  table: ITable;
+}
 
 export class LambdaStack extends Stack {
-  public readonly helloLambdaIntegration: LambdaIntegration
+  public readonly helloLambdaIntegration: LambdaIntegration;
 
-  constructor(scope: Construct, id: string, props?: StackProps) {
-    super(scope, id, props)
+  constructor(scope: Construct, id: string, props: LambdaStackProps) {
+    super(scope, id, props);
 
-    const helloLambda = new Lambda(this, 'hello-lambda', {
+    const helloLambda = new NodejsFunction(this, "hello-lambda", {
       runtime: Runtime.NODEJS_20_X,
-      handler: 'hello.main',
-      code: Code.fromAsset(join(__dirname, '..', '..', 'services'))
-    })
+      handler: "handler",
+      entry: join(__dirname, "..", "..", "services", "hello.ts"),
+      environment: {
+        TABLE_NAME: props.table.tableName,
+      },
+    });
 
-    this.helloLambdaIntegration = new LambdaIntegration(helloLambda)
+    helloLambda.addToRolePolicy(
+      new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: ["s3:ListAllMyBuckets", "s3:ListBuckets"],
+        resources: ["*"],
+      })
+    );
+    this.helloLambdaIntegration = new LambdaIntegration(helloLambda);
   }
 }
